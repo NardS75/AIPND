@@ -1,0 +1,10 @@
+
+** Image Classification Results using CNN model architecture 'resnet'
+Total processed images: 40 - Dog images count: 30 - 'Not-a' Dog images count: 10
+Results: 
+    - Correct Dogs classification:        100.00%
+    - Correct Breed classification:       90.00%
+    - Correct 'Not-a' Dog classification: 90.00%
+    - Total Labels matching:              82.50%
+
+** Total Elapsed Runtime: 0:0:7

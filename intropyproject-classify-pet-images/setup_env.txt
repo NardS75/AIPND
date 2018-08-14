@@ -1,0 +1,5 @@
+conda create -n dog python=3.6
+source activate dog
+conda install -c anaconda pillow
+conda install -c soumith torchvision
+conda install pytorch torchvision -c pytorch

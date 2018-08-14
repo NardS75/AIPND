@@ -1,0 +1,10 @@
+
+** Image Classification Results using CNN model architecture 'vgg'
+Total processed images: 40 - Dog images count: 30 - 'Not-a' Dog images count: 10
+Results: 
+    - Correct Dogs classification:        100.00%
+    - Correct Breed classification:       93.33%
+    - Correct 'Not-a' Dog classification: 100.00%
+    - Total Labels matching:              87.50%
+
+** Total Elapsed Runtime: 0:0:58
