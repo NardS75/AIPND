@@ -3,12 +3,12 @@
 #
 # PROGRAMMER: Vittorio Nardone
 # DATE CREATED: 05/07/2018
-# REVISED DATE:             <=(Date Revised - if any)
+# REVISED DATE: 11/21/2018            <=(Date Revised - if any)
 # PURPOSE: Train a new deep neural network on a image dataset and save
 #          the model as a checkpoint.
 #          Use a trained network to predict the class for an input image
 #          loading checkpoint model
-#          Pre-trained networks are used (VGG/Densenet/AlexNet)
+#          Pre-trained networks are used (VGG/Densenet/AlexNet/ResNet)
 #
 
 import torch
@@ -31,7 +31,7 @@ def supported_models():
     return ['densenet121', 'densenet161', 'densenet169', 'densenet201',
             'vgg11', 'vgg13', 'vgg16', 'vgg19',
             'vgg11_bn', 'vgg13_bn', 'vgg16_bn', 'vgg19_bn',
-            'alexnet']
+            'alexnet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
 def gpu_available():
     ''' Return True if Cuda/GPU is available on current system
@@ -60,28 +60,36 @@ def create_new_model(arch):
 
 def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = False, print_desc = True):
     """
-    Create classifier according to specified parameters.
+    Create classifier according to specified parameters and change it inplace.
     Parameters:
-     model - model object
+     model - the model object
      hiddend_units - int array with number of elements for each hidden layer
      class_count - number of output layer elements
      dropout - dropout probability, if 0 dropout is not added in classifier
      skip_add - if True, does not add input/output layers (useful when loading checkpoint)
     Returns:
-     classifier - the classifier object
+     None
     """
     if not skip_add:
-        # Check model original classifier input count
-        if type(model.classifier) == torch.nn.modules.container.Sequential:
-            #Get first Linear
-            for idx in np.arange(len(model.classifier)):
-                if type(model.classifier[idx]) == torch.nn.modules.linear.Linear:
-                    input_count = model.classifier[idx].in_features
-                    break
-        elif type(model.classifier) == torch.nn.modules.linear.Linear:
-            input_count = model.classifier.in_features
+        # Find model original classifier name
+        if hasattr(model, 'classifier'):
+            orig_classifier = model.classifier
+        elif hasattr(model, 'fc'):
+            orig_classifier = model.fc
         else:
-            raise Exception("Unknow classifier type: {}".format(type(model.classifier)))
+            raise Exception("Unknow classifier name")
+
+        # Check model original classifier input count
+        if type(orig_classifier) == torch.nn.modules.container.Sequential:
+            #Get first Linear
+            for idx in np.arange(len(orig_classifier)):
+                if type(orig_classifier[idx]) == torch.nn.modules.linear.Linear:
+                    input_count = orig_classifier[idx].in_features
+                    break
+        elif type(orig_classifier) == torch.nn.modules.linear.Linear:
+            input_count = orig_classifier.in_features
+        else:
+            raise Exception("Unknow classifier type: {}".format(type(orig_classifier)))
         # Input and output layers
         hidden_units.insert(0, input_count)
         hidden_units.append(class_count)
@@ -102,7 +110,11 @@ def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = 
     if print_desc:
         print("Classifier:", classifier)
 
-    return classifier
+    # Find model original classifier and replace it
+    if hasattr(model, 'classifier'):
+        model.classifier = classifier
+    elif hasattr(model, 'fc'):
+        model.fc = classifier
 
 def model_train_epoch(model, criterion, optimizer, training_loader, gpu_mode):
     """
@@ -138,7 +150,7 @@ def model_train_epoch(model, criterion, optimizer, training_loader, gpu_mode):
         loss.backward()
         optimizer.step()
 
-        running_loss += loss.data[0]
+        running_loss += loss.item()
 
     return model, running_loss / steps
 
@@ -176,7 +188,7 @@ def model_validation(model, criterion, validation_loader, gpu_mode):
         outputs = model.forward(inputs)
         loss = criterion(outputs, labels)
 
-        running_loss += loss.data[0]
+        running_loss += loss.item()
 
         ps = F.softmax(outputs, dim=1)
         if gpu_mode:
@@ -242,11 +254,16 @@ def create_and_train(data_folder,
     model = create_new_model(arch)
 
     # Create a new Classifier
-    model.classifier = create_classifier(model, hidden_units, len(training_data.classes), dropout = dropout)
+    create_classifier(model, hidden_units, len(training_data.classes), dropout = dropout)
 
     # Criterion and optimizer definition
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.classifier.parameters(), lr=learning_rate)
+    if hasattr(model, 'classifier'):
+        optimizer = optim.SGD(model.classifier.parameters(), lr=learning_rate)
+    elif hasattr(model, 'fc'):
+        optimizer = optim.SGD(model.fc.parameters(), lr=learning_rate)
+    else:
+        raise Exception("Unknow classifier name")
 
     print("Learning rate:", learning_rate, "- Criterion: CrossEntropyLoss", "- Optimizer: SGD")
     print("Training stop after {} epoch(s)".format(epochs), end = ' ')
@@ -337,11 +354,11 @@ def create_model_from_checkpoint(filename):
     model = create_new_model(checkpoint['model_config']['arch'])
 
     #Create a new classifier with checkpoint configuration
-    model.classifier = create_classifier(model,
-                                         checkpoint['model_config']['hidden_units'],
-                                         checkpoint['model_config']['class_count'],
-                                         skip_add = True,
-                                         print_desc = False)
+    create_classifier(model,
+                      checkpoint['model_config']['hidden_units'],
+                      checkpoint['model_config']['class_count'],
+                      skip_add = True,
+                      print_desc = False)
 
     #Loading state and classe idxs
     model.load_state_dict(checkpoint['model_state_dict'])
