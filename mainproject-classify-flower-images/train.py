@@ -119,6 +119,10 @@ def get_input_args():
                     help = "If set, GPU is used to train the model (default: False)")
     parser.add_argument('--dropout', type = float, default = 0,
                     help = "Add specified probability Dropout between classifier layers (default: no dropout)")
+    parser.add_argument('--bn', action='store_true',
+                    help = "Add batch normalization layer in classifier (default: no)")
+    parser.add_argument('--optimizer', type = str, choices=mh.supported_optimizer(), default = 'SGD',
+                    help = "Set optimizer to be used (default: 'SGD')")
 
     in_arg = parser.parse_args()
 
@@ -190,7 +194,9 @@ def model_training(in_arg):
                                 learning_rate = in_arg.learning_rate,
                                 accuracy = in_arg.min_accuracy,
                                 gpu_mode = in_arg.gpu,
-                                dropout = in_arg.dropout)
+                                dropout = in_arg.dropout,
+                                bn = in_arg.bn,
+                                optimization = in_arg.optimizer)
     return model
 
 

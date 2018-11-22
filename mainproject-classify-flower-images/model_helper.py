@@ -33,6 +33,11 @@ def supported_models():
             'vgg11_bn', 'vgg13_bn', 'vgg16_bn', 'vgg19_bn',
             'alexnet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
+def supported_optimizer():
+    ''' Return a list of supported optimizer
+    '''
+    return ['SGD','Adam']
+
 def gpu_available():
     ''' Return True if Cuda/GPU is available on current system
     '''
@@ -58,7 +63,7 @@ def create_new_model(arch):
     return model
 
 
-def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = False, print_desc = True):
+def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = False, bn = False, bn_momentum = 0.01, print_desc = True):
     """
     Create classifier according to specified parameters and change it inplace.
     Parameters:
@@ -67,6 +72,8 @@ def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = 
      class_count - number of output layer elements
      dropout - dropout probability, if 0 dropout is not added in classifier
      skip_add - if True, does not add input/output layers (useful when loading checkpoint)
+     bn - if True, add a BatchNorm1d layer
+     bn_momentum - BatchNorm1d momentum setting
     Returns:
      None
     """
@@ -104,6 +111,8 @@ def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = 
             # Add Dropout
             if (dropout > 0):
                 classifier_list.append(('drop{}'.format(idx+1), nn.Dropout(p=dropout)))
+        if bn:
+            classifier_list.append(('bn{}'.format(idx+1), nn.BatchNorm1d(hidden_units[idx+1], momentum=bn_momentum)))
 
     classifier = nn.Sequential(OrderedDict(classifier_list))
 
@@ -204,8 +213,8 @@ def model_validation(model, criterion, validation_loader, gpu_mode):
 def create_and_train(data_folder,
                      training_subfolder = '/train/',
                      validation_subfolder = '/valid/',
-                     arch = 'densenet121', hidden_units = [], dropout = 0,
-                     epochs =  10, learning_rate = 0.05, accuracy = 0.8,
+                     arch = 'densenet121', hidden_units = [], dropout = 0, bn = False,
+                     epochs =  10, learning_rate = 0.05, accuracy = 0.8, optimization = 'SGD',
                      gpu_mode = False):
     """
     Create a model and train it according to specified parameters.
@@ -254,18 +263,31 @@ def create_and_train(data_folder,
     model = create_new_model(arch)
 
     # Create a new Classifier
-    create_classifier(model, hidden_units, len(training_data.classes), dropout = dropout)
+    create_classifier(model, hidden_units, len(training_data.classes), dropout = dropout, bn = bn)
 
     # Criterion and optimizer definition
     criterion = nn.CrossEntropyLoss()
-    if hasattr(model, 'classifier'):
-        optimizer = optim.SGD(model.classifier.parameters(), lr=learning_rate)
-    elif hasattr(model, 'fc'):
-        optimizer = optim.SGD(model.fc.parameters(), lr=learning_rate)
-    else:
-        raise Exception("Unknow classifier name")
 
-    print("Learning rate:", learning_rate, "- Criterion: CrossEntropyLoss", "- Optimizer: SGD")
+    if optimization == 'SGD':
+        if hasattr(model, 'classifier'):
+            optimizer = optim.SGD(model.classifier.parameters(), lr=learning_rate)
+        elif hasattr(model, 'fc'):
+            optimizer = optim.SGD(model.fc.parameters(), lr=learning_rate)
+        else:
+            raise Exception("Unknow classifier name")
+
+    elif optimization == 'Adam':
+        if hasattr(model, 'classifier'):
+            optimizer = optim.Adam(model.classifier.parameters(), lr=learning_rate)
+        elif hasattr(model, 'fc'):
+            optimizer = optim.Adam(model.fc.parameters(), lr=learning_rate)
+        else:
+            raise Exception("Unknow classifier name")
+
+    else:
+        raise Exception("Unknow optimization algorithm")
+
+    print("Learning rate:", learning_rate, "- Criterion: CrossEntropyLoss", "- Optimizer:", optimization)
     print("Training stop after {} epoch(s)".format(epochs), end = ' ')
     if accuracy < 1:
         print("or validation accuracy > {}%".format(accuracy*100), end = ' ')
@@ -305,7 +327,8 @@ def create_and_train(data_folder,
                      'class_to_idx': training_data.class_to_idx,
                      'gpu_mode' : gpu_mode,
                      'train_epoch' : epoch_count,
-                     'learning_rate' : learning_rate
+                     'learning_rate' : learning_rate,
+                     'bn' : bn,
                    }
 
     return model
@@ -354,11 +377,18 @@ def create_model_from_checkpoint(filename):
     model = create_new_model(checkpoint['model_config']['arch'])
 
     #Create a new classifier with checkpoint configuration
+
+    #backward compatibility - chech if 'bn' key is present in model configuration
+    bn = False
+    if 'bn' in checkpoint['model_config']:
+        bn = checkpoint['model_config']['bn']
+
     create_classifier(model,
                       checkpoint['model_config']['hidden_units'],
                       checkpoint['model_config']['class_count'],
                       skip_add = True,
-                      print_desc = False)
+                      print_desc = False,
+                      bn = bn)
 
     #Loading state and classe idxs
     model.load_state_dict(checkpoint['model_state_dict'])

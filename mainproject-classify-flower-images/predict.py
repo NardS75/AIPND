@@ -71,7 +71,7 @@ def main():
             if c in cat_to_name:
                 print("- Category: '{}'".format(cat_to_name[c].title()), end = ' ')
             else:
-                print("- Category: (not found)", end = ' ')                
+                print("- Category: (not found)", end = ' ')
         print()
 
     tot_time = time() - start_time
