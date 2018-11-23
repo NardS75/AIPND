@@ -115,6 +115,10 @@ def get_input_args():
                     help = "Hidden layer units in classifier. Example: --hidden_units = 1024 (add one hidden layer with 1024 units) --hidden_units = 1024,512 (add two hidden layers with 1024 and 512 units) (default: no hidden layers)")
     parser.add_argument('--epochs', type = int, default = 0,
                     help = "Model training epochs. If not set, training process stops after 10 epochs or 0.85 accuracy reached")
+    parser.add_argument('--full_net_epochs', type = int, default = 0,
+                    help = "Full net training epochs. If not set, no full net training is performed")
+    parser.add_argument('--batch_size', type = int, default = 64,
+                    help = "Model training batch size")
     parser.add_argument('--gpu', action='store_true',
                     help = "If set, GPU is used to train the model (default: False)")
     parser.add_argument('--dropout', type = float, default = 0,
@@ -196,7 +200,9 @@ def model_training(in_arg):
                                 gpu_mode = in_arg.gpu,
                                 dropout = in_arg.dropout,
                                 bn = in_arg.bn,
-                                optimization = in_arg.optimizer)
+                                optimization = in_arg.optimizer,
+                                batch_size = in_arg.batch_size,
+                                full_net_epochs = in_arg.full_net_epochs)
     return model
 
 

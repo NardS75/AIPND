@@ -103,6 +103,7 @@ def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = 
 
     classifier_list = []
     iterations = len(hidden_units)-1
+
     for idx in np.arange(iterations):
         classifier_list.append(('fc{}'.format(idx+1), nn.Linear(hidden_units[idx], hidden_units[idx+1])))
         # Add ReLU
@@ -111,8 +112,9 @@ def create_classifier(model, hidden_units, class_count, dropout = 0, skip_add = 
             # Add Dropout
             if (dropout > 0):
                 classifier_list.append(('drop{}'.format(idx+1), nn.Dropout(p=dropout)))
-        if bn:
-            classifier_list.append(('bn{}'.format(idx+1), nn.BatchNorm1d(hidden_units[idx+1], momentum=bn_momentum)))
+            # Add Batch Normalization
+            if bn:
+                classifier_list.append(('bn{}'.format(idx+1), nn.BatchNorm1d(hidden_units[idx+1], momentum=bn_momentum)))
 
     classifier = nn.Sequential(OrderedDict(classifier_list))
 
@@ -209,13 +211,38 @@ def model_validation(model, criterion, validation_loader, gpu_mode):
 
     return running_loss / steps, correct_preds / tot_preds
 
+def create_optimizer(model, optimization = 'SGD', learning_rate = 0.05, full_net = False):
+    if optimization == 'SGD':
+        if full_net:
+            optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+        else:
+            if hasattr(model, 'classifier'):
+                optimizer = optim.SGD(model.classifier.parameters(), lr=learning_rate)
+            elif hasattr(model, 'fc'):
+                optimizer = optim.SGD(model.fc.parameters(), lr=learning_rate)
+            else:
+                raise Exception("Unknow classifier name")
+    elif optimization == 'Adam':
+        if full_net:
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        else:
+            if hasattr(model, 'classifier'):
+                optimizer = optim.Adam(model.classifier.parameters(), lr=learning_rate)
+            elif hasattr(model, 'fc'):
+                optimizer = optim.Adam(model.fc.parameters(), lr=learning_rate)
+            else:
+                raise Exception("Unknow classifier name")
+    else:
+        raise Exception("Unknow optimization algorithm")
+    return optimizer
 
 def create_and_train(data_folder,
                      training_subfolder = '/train/',
                      validation_subfolder = '/valid/',
+                     batch_size = 64,
                      arch = 'densenet121', hidden_units = [], dropout = 0, bn = False,
                      epochs =  10, learning_rate = 0.05, accuracy = 0.8, optimization = 'SGD',
-                     gpu_mode = False):
+                     gpu_mode = False, full_net_epochs = 0):
     """
     Create a model and train it according to specified parameters.
     Parameters:
@@ -229,6 +256,9 @@ def create_and_train(data_folder,
      learning_rate - learning rate to be used in optimizer
      accuracy - validation accuracy threshold
      gpu_mode - use GPU if True
+     optimization - set optimization algorithm (Adam/SGD)
+     bn - add Batch Normalization layers in classifier
+     full_net_epochs - Retrain all elements of network after classifier training for specified epochs
     Returns:
      model - the trained model object
     """
@@ -255,8 +285,8 @@ def create_and_train(data_folder,
     validation_data = datasets.ImageFolder(os.path.normpath(data_folder + validation_subfolder), transform=validation_transforms)
 
     # Batch loader definition
-    training_loader = torch.utils.data.DataLoader(training_data, batch_size=64, shuffle=True)
-    validation_loader = torch.utils.data.DataLoader(validation_data, batch_size=32)
+    training_loader = torch.utils.data.DataLoader(training_data, batch_size=batch_size, shuffle=True)
+    validation_loader = torch.utils.data.DataLoader(validation_data, batch_size=batch_size)
 
     # Create model
     print("Model architecture: '{}'".format(arch), "- GPU Mode:", gpu_mode)
@@ -267,28 +297,11 @@ def create_and_train(data_folder,
 
     # Criterion and optimizer definition
     criterion = nn.CrossEntropyLoss()
-
-    if optimization == 'SGD':
-        if hasattr(model, 'classifier'):
-            optimizer = optim.SGD(model.classifier.parameters(), lr=learning_rate)
-        elif hasattr(model, 'fc'):
-            optimizer = optim.SGD(model.fc.parameters(), lr=learning_rate)
-        else:
-            raise Exception("Unknow classifier name")
-
-    elif optimization == 'Adam':
-        if hasattr(model, 'classifier'):
-            optimizer = optim.Adam(model.classifier.parameters(), lr=learning_rate)
-        elif hasattr(model, 'fc'):
-            optimizer = optim.Adam(model.fc.parameters(), lr=learning_rate)
-        else:
-            raise Exception("Unknow classifier name")
-
-    else:
-        raise Exception("Unknow optimization algorithm")
+    optimizer = create_optimizer(model, optimization = optimization,
+                                 learning_rate = learning_rate)
 
     print("Learning rate:", learning_rate, "- Criterion: CrossEntropyLoss", "- Optimizer:", optimization)
-    print("Training stop after {} epoch(s)".format(epochs), end = ' ')
+    print("Batch Size: {} - Training stop after {} epoch(s)".format(batch_size, epochs), end = ' ')
     if accuracy < 1:
         print("or validation accuracy > {}%".format(accuracy*100), end = ' ')
     print()
@@ -318,6 +331,29 @@ def create_and_train(data_folder,
 
     if (epoch_count < epochs):
           print("\n** Validation accuracy threshold reached")
+    elif full_net_epochs > 0:
+          # Retrain whole network
+          for param in model.parameters():
+              param.requires_grad = True
+
+          epoch_count = 0
+          optimizer = create_optimizer(model, optimization = optimization,
+                                       learning_rate = learning_rate,
+                                       full_net = True)
+
+          while (epoch_count < full_net_epochs) and (validation_accuracy < accuracy):
+              epoch_count += 1
+
+              epoc_time = time()
+              print("\n** Training epoch {}/{} BEGIN **".format(epoch_count, epochs))
+              model, train_loss = model_train_epoch(model, criterion, optimizer, training_loader, gpu_mode)
+              print("Epoch duration:", strftime("%H:%M:%S", gmtime(time() - epoc_time)), "- Loss on training dataset: {:.4f}".format(train_loss))
+              print("** Training epoch {}/{} END **".format(epoch_count, epochs))
+
+              print("\n** Validation after {} epoch(s) **".format(epoch_count))
+              valid_loss, validation_accuracy = model_validation(model, criterion, validation_loader, gpu_mode)
+              print("Loss on validation dataset: {:.4f}".format(valid_loss), "- Accuracy: {:.2f}%".format(validation_accuracy*100))
+
 
     # Save configuration for futher use
     model.config = { 'arch' : arch,
