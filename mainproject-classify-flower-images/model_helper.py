@@ -332,6 +332,7 @@ def create_and_train(data_folder,
     if (epoch_count < epochs):
           print("\n** Validation accuracy threshold reached")
     elif full_net_epochs > 0:
+          print("\n** Full network training BEGIN **")
           # Retrain whole network
           for param in model.parameters():
               param.requires_grad = True
@@ -353,6 +354,8 @@ def create_and_train(data_folder,
               print("\n** Validation after {} epoch(s) **".format(epoch_count))
               valid_loss, validation_accuracy = model_validation(model, criterion, validation_loader, gpu_mode)
               print("Loss on validation dataset: {:.4f}".format(valid_loss), "- Accuracy: {:.2f}%".format(validation_accuracy*100))
+
+          print("\n** Full network training END **")
 
 
     # Save configuration for futher use
