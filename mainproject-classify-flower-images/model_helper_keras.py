@@ -36,7 +36,7 @@ import helper
 def supported_models():
     ''' Return a list of supported models architecture
     '''
-    return ['MobileNet']
+    return ['MobileNet', 'densenet121']
 
 def supported_optimizer():
     ''' Return a list of supported optimizer
@@ -61,13 +61,15 @@ def create_new_model(arch):
     if arch in supported_models():
         if arch == 'MobileNet':
             model = app.mobilenet.MobileNet(weights='imagenet', include_top=False)
+        elif arch == 'densenet121':
+            model = app.densenet.DenseNet121(weights='imagenet', include_top=False)
     else:
         raise Exception("Unknow architecture: {}".format(arch))
 
     return model
 
 
-def create_classifier(base_model, hidden_units, class_count):
+def create_classifier(base_model, hidden_units, class_count, bn = False, bn_momentum = 0.99):
     """
     Create classifier according to specified parameters and change it inplace.
     Parameters:
@@ -90,6 +92,8 @@ def create_classifier(base_model, hidden_units, class_count):
     for idx in range(iterations):
         if idx < iterations-1:
             x = Dense(hidden_units[idx], activation='relu')(x)
+            if bn:
+                x = BatchNormalization(momentum = bn_momentum)(x)
         else:
             x = Dense(hidden_units[idx], activation='softmax')(x)
     
@@ -136,15 +140,24 @@ def create_and_train(data_folder,
     # Set data folder to current directory if empty
     if (data_folder == ''):
         data_folder = '.'
-
+        
     # Dataset loading
+    if arch == 'MobileNet':
+        pf = keras.applications.mobilenet.preprocess_input
+    elif arch == 'densenet121':
+        pf = keras.applications.densenet.preprocess_input
+    
     train_generator = ImageDataGenerator(
-              preprocessing_function=keras.applications.mobilenet.preprocess_input
+              rotation_range=20,
+              width_shift_range=0.2,
+              height_shift_range=0.2,
+              horizontal_flip=True,        
+              preprocessing_function=pf
               ).flow_from_directory(os.path.normpath(data_folder + training_subfolder), target_size=(224, 224),
           class_mode='categorical', batch_size=batch_size)
 
     valid_generator = ImageDataGenerator(
-              preprocessing_function=keras.applications.mobilenet.preprocess_input
+              preprocessing_function=pf
               ).flow_from_directory(os.path.normpath(data_folder + validation_subfolder), target_size=(224, 224),
           class_mode='categorical', batch_size=batch_size)
 
@@ -156,6 +169,8 @@ def create_and_train(data_folder,
     # Create a new Classifier
     model = create_classifier(base_model, hidden_units, len(set(train_generator.classes)))
 
+    print(model.summary())
+    
     for layer in base_model.layers:
         layer.trainable = False
 
@@ -163,7 +178,7 @@ def create_and_train(data_folder,
     optimizer = create_optimizer(optimization = optimization,
                                  learning_rate = learning_rate)
 
-    model.compile(optimizer=optimizer, loss='categorical_crossentropy')
+    model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['acc'])
 
 
     print("Learning rate:", learning_rate, "- Criterion: CrossEntropyLoss", "- Optimizer:", optimization)
@@ -173,18 +188,20 @@ def create_and_train(data_folder,
     print()
 
     
-    model.fit_generator(generator=train_generator,
+    history  = model.fit_generator(generator=train_generator,
                         steps_per_epoch=train_generator.n//train_generator.batch_size,
                         validation_data=valid_generator,
                         validation_steps=valid_generator.n//valid_generator.batch_size,
-                        epochs=epochs)
+                        epochs=epochs,
+                        use_multiprocessing = True,
+                        workers = 4)
 
     # Save configuration for futher use
     model.config = { 'arch' : arch,
                      'hidden_units' : hidden_units,
                      'dropout' : dropout,
                      'class_count' : len(set(train_generator.classes)),
-                     'class_to_idx': training_data.class_to_idx,
+                     #'class_to_idx': training_data.class_to_idx,
                      'gpu_mode' : gpu_mode,
                      'train_epoch' : epochs,
                      'learning_rate' : learning_rate,
