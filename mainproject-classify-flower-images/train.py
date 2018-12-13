@@ -68,7 +68,7 @@ import argparse
 import os.path
 from time import time, gmtime, strftime
 
-import model_helper as mh
+import model_helper_keras as mh
 
 # Main program function defined below
 def main():
