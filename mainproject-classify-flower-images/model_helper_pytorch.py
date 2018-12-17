@@ -359,7 +359,8 @@ def create_and_train(data_folder,
 
 
     # Save configuration for futher use
-    model.config = { 'arch' : arch,
+    model.config = { 'backend' : 'pytorch',
+                     'arch' : arch,
                      'hidden_units' : hidden_units,
                      'dropout' : dropout,
                      'class_count' : len(training_data.classes),

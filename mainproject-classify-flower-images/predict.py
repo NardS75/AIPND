@@ -41,7 +41,22 @@ import os.path
 from time import time, gmtime, strftime
 import json
 
-import model_helper as mh
+import model_helper_keras as mhk
+import model_helper_pytorch as mhp
+
+def get_backend(checkpoint_file):
+    file_ext = checkpoint_file.rsplit('.', 1)[-1]
+    backend  = ''
+    
+    if file_ext == 'pth':
+        backend = 'pytorch'
+    elif file_ext == 'h5':
+        backend = 'keras'
+    else:
+        raise Exception("Unknow checkpoint file extension: {}".format(file_ext))
+    
+    return backend
+    
 
 # Main program function defined below
 def main():
@@ -50,16 +65,27 @@ def main():
 
     #Parse command line arguments
     in_arg = get_input_args()
-
-    #Load model checkpoint
-    model = mh.create_model_from_checkpoint(in_arg.checkpoint)
-
+    
     #Load categories
     if in_arg.category_names != '':
-        cat_to_name = load_category_names(in_arg.category_names)
+        cat_to_name = load_category_names(in_arg.category_names)    
 
-    #Prediction
-    probs, classes = mh.predict(in_arg.input, model, in_arg.top_k, gpu_mode = in_arg.gpu)
+    
+    if in_arg.backend == 'keras':
+        #Load model checkpoint
+        model = mhk.create_model_from_checkpoint(in_arg.checkpoint)
+        #Prediction
+        probs, classes = mhk.predict(in_arg.input, model, in_arg.top_k)        
+
+    elif in_arg.backend == 'pytorch':
+        #Load model checkpoint
+        model = mhp.create_model_from_checkpoint(in_arg.checkpoint)
+        #Prediction
+        probs, classes = mhp.predict(in_arg.input, model, in_arg.top_k, gpu_mode = in_arg.gpu)        
+
+    else:
+        raise Exception("Unknow backend: {}".format(in_arg.backend))
+
 
     print("\n** Top {} prediction result for filename '{}'".format(in_arg.top_k, in_arg.input))
 
@@ -107,6 +133,7 @@ def get_input_args():
 
     in_arg.input = in_arg.input[0]
     in_arg.checkpoint = in_arg.checkpoint[0]
+    in_arg.backend = get_backend(in_arg.checkpoint)
 
     error_list = []
 
@@ -128,15 +155,16 @@ def get_input_args():
             error_list.append("predict.py: error: argument: --category_names: file not found '{}'".format(in_arg.category_names))
 
     # Check GPU
-    if in_arg.gpu and not mh.gpu_available():
-        error_list.append("predict.py: error: argument: --gpu: GPU not available")
+    if in_arg.backend == 'pytorch':
+        if in_arg.gpu and not mh.gpu_available():
+            error_list.append("predict.py: error: argument: --gpu: GPU not available")
 
     # Print errors
     if len(error_list) > 0:
         parser.print_usage()
         print('\n'.join(error for error in error_list))
         quit()
-
+        
     # return arguments object
     return in_arg
 
