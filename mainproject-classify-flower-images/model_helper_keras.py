@@ -176,9 +176,6 @@ def create_and_train(data_folder,
     Returns:
      model - the trained model object
     """
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-    
-    
     # Set data folder to current directory if empty
     if (data_folder == ''):
         data_folder = '.'
@@ -323,8 +320,6 @@ def create_model_from_checkpoint(filename):
     Returns:
      model - the model object
     """
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-    
     model = models.load_model(filename)
 
     config_file = filename.rsplit('.', 1)[0] + '.json'
@@ -333,6 +328,8 @@ def create_model_from_checkpoint(filename):
         model.config = load_model_config(config_file)
     else:
         raise Exception("Configuration file '{}' not found!".format(config_file))
+        
+    model.pf = get_preprocess_function(model.config['arch'])
     
     return model 
 
@@ -342,12 +339,12 @@ def predict(image_path, model, topk=5):
     ''' Predict the class (or classes) of an image using a trained deep learning model.'''
    
     #Load and pre-process image
-    pf = get_preprocess_function(model.config['arch'])
     img = image.load_img(image_path, target_size=(224, 224))
     img_np = image.img_to_array(img)
     img_np = np.expand_dims(img_np, axis=0)
-    img_np = pf(img_np)    
+    img_np = model.pf(img_np)    
     
+    #Predict!
     ps = model.predict(img_np)[0]
    
     #Get topk
@@ -358,6 +355,10 @@ def predict(image_path, model, topk=5):
     
     return probs, classes 
 
+
+
+# Set TensorFlow log level (hide debug messages)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 # TODO: add module sanity check
 if __name__ == "__main__":
