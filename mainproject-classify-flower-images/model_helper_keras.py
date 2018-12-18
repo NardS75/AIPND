@@ -11,24 +11,19 @@
 #          Pre-trained networks are used (VGG/Densenet/AlexNet/ResNet)
 #
 
-#import torch
-#from torch import nn
-#from torch import optim
-#import torch.nn.functional as F
-#from torch.autograd import Variable
-#from torchvision import datasets, transforms, models
-
 from keras import applications
 from keras import layers
 from keras import models
 from keras import optimizers
 
 from keras.preprocessing.image import ImageDataGenerator
+from keras.preprocessing import image
 from keras import backend as K
 
 from collections import OrderedDict
 import numpy as np
 import os
+import json
 from time import time, gmtime, strftime
 from PIL import Image
 
@@ -37,8 +32,12 @@ import helper
 def supported_models():
     ''' Return a list of supported models architecture
     '''
-    return ['densenet121',
-            'mobilenet']
+    return ['densenet121', 'densenet169', 'densenet201',
+            'vgg16', 'vgg19',
+            'mobilenet',
+            'mobilenetv2',
+            'resnet50',
+            'nasnetmobile']
 
 def supported_optimizer():
     ''' Return a list of supported optimizer
@@ -53,6 +52,29 @@ def gpu_available():
         avail = True
     return avail
 
+def get_preprocess_function(arch):
+    """
+    Return preprocess function of specified architecture model.
+    """
+    if arch == 'mobilenet':
+        pf = applications.mobilenet.preprocess_input
+    elif arch == 'mobilenetv2':
+        pf = applications.mobilenet_v2.preprocess_input        
+    elif arch in ['densenet121', 'densenet169', 'densenet201']:
+        pf = applications.densenet.preprocess_input
+    elif arch == 'vgg16':
+        pf = applications.vgg16.preprocess_input
+    elif arch == 'vgg19':
+        pf = applications.vgg19.preprocess_input
+    elif arch == 'resnet50':
+        pf = applications.resnet50.preprocess_input
+    elif arch == 'nasnetmobile':
+        pf = applications.nasnetmobile.preprocess_input
+    else:
+        raise Exception("Unknow architecture: {}".format(arch))        
+
+    return pf
+
 def create_new_model(arch):
     """
     Create a new pretrained model with specified architecture.
@@ -65,8 +87,22 @@ def create_new_model(arch):
     if arch in supported_models():
         if arch == 'mobilenet':
             model = applications.mobilenet.MobileNet(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'mobilenetv2':
+            model = applications.mobilenet_v2.MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))
         elif arch == 'densenet121':
             model = applications.densenet.DenseNet121(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'densenet169':
+            model = applications.densenet.DenseNet169(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'densenet201':
+            model = applications.densenet.DenseNet201(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'vgg16':
+            model = applications.vgg16.VGG16(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'vgg19':
+            model = applications.vgg19.VGG19(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'resnet50':
+            model = applications.resnet50.ResNet50(weights='imagenet', include_top=False, input_shape=(224,224,3))
+        elif arch == 'nasnetmobile':
+            model = applications.nasnet.NASNetMobile(weights='imagenet', include_top=False, input_shape=(224,224,3))
     else:
         raise Exception("Unknow architecture: {}".format(arch))
 
@@ -75,7 +111,7 @@ def create_new_model(arch):
 
 def create_classifier(base_model, hidden_units, class_count, bn = False, bn_momentum = 0.99):
     """
-    Create classifier according to specified parameters and change it inplace.
+    Create classifier according to specified parameters and return a new model.
     Parameters:
      base_model - the model object
      hiddend_units - int array with number of elements for each hidden layer
@@ -146,12 +182,14 @@ def create_and_train(data_folder,
     # Set data folder to current directory if empty
     if (data_folder == ''):
         data_folder = '.'
+
+        
+    # Create model
+    print("Model architecture: '{}'".format(arch), "- GPU Mode: ", gpu_available())
+    base_model = create_new_model(arch)        
         
     # Dataset loading
-    if arch == 'mobilenet':
-        pf = applications.mobilenet.preprocess_input
-    elif arch == 'densenet121':
-        pf = applications.densenet.preprocess_input
+    pf = get_preprocess_function(arch)
     
     train_generator = ImageDataGenerator(
               rotation_range=20,
@@ -166,11 +204,6 @@ def create_and_train(data_folder,
               preprocessing_function=pf
               ).flow_from_directory(os.path.normpath(data_folder + validation_subfolder), target_size=(224, 224),
           class_mode='categorical', batch_size=batch_size)
-
-
-    # Create model
-    print("Model architecture: '{}'".format(arch), "- GPU Mode: ", gpu_available())
-    base_model = create_new_model(arch)
 
     # Create a new Classifier
     model = create_classifier(base_model, hidden_units, len(set(train_generator.classes)), bn=bn)
@@ -241,6 +274,21 @@ def create_and_train(data_folder,
             
     return model
 
+def save_model_config(model, filename):
+    """
+    Save model configuration to json file
+    """
+    with open(filename, 'w') as fp:
+        json.dump(model.config, fp)
+        
+def load_model_config(filename): 
+    """
+    Load model configuration from json file and return it
+    """
+    with open(filename, 'r') as fp:
+        data = json.load(fp)    
+    return data
+
 def save_checkpoint(model, destination_folder, filename = ""):
     """
     Save model checkpoint to file.
@@ -263,9 +311,9 @@ def save_checkpoint(model, destination_folder, filename = ""):
     full_filename = os.path.normpath("{}/{}".format(destination_folder,filename))
     model.save(full_filename)  
 
-    label_map_file = full_filename.rsplit('.', 1)[0] + '.lbl'
-    np.save(label_map_file, model.config['label_map']) 
-    
+    config_file = full_filename.rsplit('.', 1)[0] + '.json'
+    save_model_config(model, config_file)
+
     print("\n** Model checkpoint saved to: '{}'".format(full_filename))
     return filename
 
@@ -277,51 +325,34 @@ def create_model_from_checkpoint(filename):
     Returns:
      model - the model object
     """
-    
-    label_map_file = filename.rsplit('.', 1)[0] + '.lbl.npy'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
     
     model = models.load_model(filename)
-    model.label_map = np.load(label_map_file).item()
+
+    config_file = filename.rsplit('.', 1)[0] + '.json'
+    model.config = load_model_config(config_file)
     
     return model 
 
-# Scales, crops, and normalizes a PIL image for a PyTorch model
-def process_image(image):
-    ''' Scales, crops, and normalizes a PIL image for a PyTorch model,
-        returns an Numpy array
-    '''
-    #Resize & Crop
-    image.thumbnail((256,256))
-    left, top, right, bottom = (image.size[0] - 224)/2, (image.size[1] - 224)/2, (image.size[0] + 224)/2, (image.size[1] + 224)/2
-    img_np = np.array(image.crop((left, top, right, bottom)))
-
-    #Normalization
-    mean = np.array([0.485, 0.456, 0.406])
-    std = np.array([0.229, 0.224, 0.225])
-    img_np = (img_np/255.0 - mean) / std
-
-    #Channels order
-    #img_np = img_np.transpose((2,0,1))
-
-    return img_np
 
 # Predict the class (or classes) of an image
 def predict(image_path, model, topk=5):
     ''' Predict the class (or classes) of an image using a trained deep learning model.'''
 
     #Load and pre-process image
-    img = Image.open(image_path)
-    img_np = process_image(img)
-    img_np = img_np[np.newaxis,:].astype('f')
+    pf = get_preprocess_function(model.config['arch'])
+    img = image.load_img(image_path, target_size=(224, 224))
+    img_np = image.img_to_array(img)
+    img_np = np.expand_dims(img_np, axis=0)
+    img_np = pf(img_np)    
     
     ps = model.predict(img_np)[0]
-    
    
     #Get topk
-    classes_idx = np.argsort(ps)[-topk:]
+    classes_idx = np.argsort(ps)[::-1][:topk]
     probs = [ps[i] for i in classes_idx]    
     
-    classes = [model.label_map[k] for k in classes_idx]  
+    classes = [model.config['label_map'][str(k)] for k in classes_idx]  
     
     return probs, classes 
 
