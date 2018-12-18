@@ -39,24 +39,11 @@
 import argparse
 import os.path
 from time import time, gmtime, strftime
-import json
 
 import model_helper_keras as mhk
 import model_helper_pytorch as mhp
+import helper
 
-def get_backend(checkpoint_file):
-    file_ext = checkpoint_file.rsplit('.', 1)[-1]
-    backend  = ''
-    
-    if file_ext == 'pth':
-        backend = 'pytorch'
-    elif file_ext == 'h5':
-        backend = 'keras'
-    else:
-        raise Exception("Unknown checkpoint file extension: {}".format(file_ext))
-    
-    return backend
-    
 
 # Main program function defined below
 def main():
@@ -68,7 +55,7 @@ def main():
     
     #Load categories
     if in_arg.category_names != '':
-        cat_to_name = load_category_names(in_arg.category_names)    
+        cat_to_name = helper.load_category_names(in_arg.category_names)    
 
     #Load model checkpoint
     if in_arg.backend == 'keras':
@@ -139,7 +126,7 @@ def get_input_args():
 
     in_arg.input = in_arg.input[0]
     in_arg.checkpoint = in_arg.checkpoint[0]
-    in_arg.backend = get_backend(in_arg.checkpoint)
+    in_arg.backend = helper.get_backend(in_arg.checkpoint)
 
     error_list = []
 
@@ -162,7 +149,7 @@ def get_input_args():
 
     # Check GPU
     if in_arg.backend == 'pytorch':
-        if in_arg.gpu and not mh.gpu_available():
+        if in_arg.gpu and not mhp.gpu_available():
             error_list.append("predict.py: error: argument: --gpu: GPU not available")
 
     # Print errors
@@ -173,14 +160,6 @@ def get_input_args():
         
     # return arguments object
     return in_arg
-
-
-# Load category names from a json file
-def load_category_names(filename):
-    """Load category names, return dict label -> name"""
-    with open(filename, 'r') as f:
-        return json.load(f)
-
 
 # Call to main function to run the program
 if __name__ == "__main__":

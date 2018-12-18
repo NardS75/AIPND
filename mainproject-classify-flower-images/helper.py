@@ -6,6 +6,8 @@
 # REVISED DATE:             <=(Date Revised - if any)
 # PURPOSE: Generic helper functions
 
+import json
+
 # Print iterations progress
 # Orginal source: https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
@@ -27,6 +29,27 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     # Print New Line on Complete
     if iteration == total:
         print()
+
+
+# Load category names from a json file
+def load_category_names(filename):
+    """Load category names, return dict label -> name"""
+    with open(filename, 'r') as f:
+        return json.load(f)
+
+# Detect backend by checkpoint file extension
+def get_backend(checkpoint_file):
+    file_ext = checkpoint_file.rsplit('.', 1)[-1]
+    backend  = ''
+    
+    if file_ext == 'pth':
+        backend = 'pytorch'
+    elif file_ext == 'h5':
+        backend = 'keras'
+    else:
+        raise Exception("Unknown checkpoint file extension: {}".format(file_ext))
+    
+    return backend
 
 # Call to main function to run the program
 if __name__ == "__main__":

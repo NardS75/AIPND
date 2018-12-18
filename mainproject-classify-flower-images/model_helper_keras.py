@@ -69,7 +69,7 @@ def get_preprocess_function(arch):
     elif arch == 'resnet50':
         pf = applications.resnet50.preprocess_input
     elif arch == 'nasnetmobile':
-        pf = applications.nasnetmobile.preprocess_input
+        pf = applications.nasnet.preprocess_input
     else:
         raise Exception("Unknow architecture: {}".format(arch))        
 
@@ -224,6 +224,7 @@ def create_and_train(data_folder,
 
     epoch_count = 0
     for e in range(epochs):
+        print("\n** Training epoch {}/{} BEGIN **".format(e, epochs))
         history  = model.fit_generator(generator=train_generator,
                         steps_per_epoch=train_generator.n//train_generator.batch_size,
                         validation_data=valid_generator,
@@ -231,10 +232,10 @@ def create_and_train(data_folder,
                         epochs=1,
                         use_multiprocessing = True,
                         workers = 4)
+        print("** Training epoch {}/{} END **".format(e, epochs))                        
         epoch_count += 1
         if history.history['val_acc'][0] > accuracy:
             break
-
     
     if full_net_epochs >0:
         print("\n** Full network training **")
