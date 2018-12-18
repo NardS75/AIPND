@@ -53,7 +53,7 @@ def get_backend(checkpoint_file):
     elif file_ext == 'h5':
         backend = 'keras'
     else:
-        raise Exception("Unknow checkpoint file extension: {}".format(file_ext))
+        raise Exception("Unknown checkpoint file extension: {}".format(file_ext))
     
     return backend
     
@@ -70,35 +70,41 @@ def main():
     if in_arg.category_names != '':
         cat_to_name = load_category_names(in_arg.category_names)    
 
-    
+    #Load model checkpoint
     if in_arg.backend == 'keras':
-        #Load model checkpoint
         model = mhk.create_model_from_checkpoint(in_arg.checkpoint)
-        #Prediction
-        probs, classes = mhk.predict(in_arg.input, model, in_arg.top_k)        
-
     elif in_arg.backend == 'pytorch':
-        #Load model checkpoint
         model = mhp.create_model_from_checkpoint(in_arg.checkpoint)
-        #Prediction
-        probs, classes = mhp.predict(in_arg.input, model, in_arg.top_k, gpu_mode = in_arg.gpu)        
-
     else:
         raise Exception("Unknow backend: {}".format(in_arg.backend))
 
+    # Get file list
+    if os.path.isfile(in_arg.input):
+        file_list = [in_arg.input]
+    else:
+        file_list = [os.path.join(in_arg.input, f) for f in os.listdir(in_arg.input) if os.path.isfile(os.path.join(in_arg.input, f))]  
+       
+    # Make predictions
+    for filename in file_list:    
 
-    print("\n** Top {} prediction result for filename '{}'".format(in_arg.top_k, in_arg.input))
+        #Prediction
+        if in_arg.backend == 'keras':
+            probs, classes = mhk.predict(filename, model, in_arg.top_k)        
+        elif in_arg.backend == 'pytorch':
+            probs, classes = mhp.predict(filename, model, in_arg.top_k, gpu_mode = in_arg.gpu)        
+        
+        print("\n** Top {} prediction result for filename '{}'".format(in_arg.top_k, filename))
 
-    result = 0
-    for c,p in zip(classes, probs):
-        result += 1
-        print("{0:2}) Class: {1:3} - Prob: {2:5.2f}%".format(result, c, p*100), end = ' ')
-        if in_arg.category_names != '':
-            if c in cat_to_name:
-                print("- Category: '{}'".format(cat_to_name[c].title()), end = ' ')
-            else:
-                print("- Category: (not found)", end = ' ')
-        print()
+        result = 0
+        for c,p in zip(classes, probs):
+            result += 1
+            print("{0:2}) Class: {1:3} - Prob: {2:5.2f}%".format(result, c, p*100), end = ' ')
+            if in_arg.category_names != '':
+                if c in cat_to_name:
+                    print("- Category: '{}'".format(cat_to_name[c].title()), end = ' ')
+                else:
+                    print("- Category: (not found)", end = ' ')
+            print()
 
     tot_time = time() - start_time
     print("\n** Total Elapsed Runtime:", strftime("%H:%M:%S", gmtime(tot_time)))
@@ -119,7 +125,7 @@ def get_input_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("input", nargs=1, type = str,
-                    help = "Input image filename")
+                    help = "Input image filename or images directory")
     parser.add_argument("checkpoint", nargs=1, type = str,
                     help = "Model checkpoint filename, created using train.py command line application")
     parser.add_argument('--top_k', type = int, default = 1,
@@ -142,8 +148,8 @@ def get_input_args():
         error_list.append("predict.py: error: argument: --top_k: must be positive int")
 
     # Check input Filename
-    if not os.path.isfile(in_arg.input):
-        error_list.append("predict.py: error: argument: input: file not found '{}'".format(in_arg.input))
+    if not os.path.exists(in_arg.input):
+        error_list.append("predict.py: error: argument: input: file/directory not found '{}'".format(in_arg.input))
 
     # Check checkpoint Filename
     if not os.path.isfile(in_arg.checkpoint):

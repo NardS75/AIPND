@@ -264,9 +264,7 @@ def create_and_train(data_folder,
                      'arch' : arch,
                      'hidden_units' : hidden_units,
                      'dropout' : dropout,
-                     #'class_count' : len(training_data.classes),
                      'label_map': dict((v,k) for k,v in train_generator.class_indices.items()),
-                     #'gpu_mode' : gpu_mode,
                      'train_epoch' : epoch_count + full_net_epochs,
                      'learning_rate' : learning_rate,
                      'bn' : bn,
@@ -330,7 +328,11 @@ def create_model_from_checkpoint(filename):
     model = models.load_model(filename)
 
     config_file = filename.rsplit('.', 1)[0] + '.json'
-    model.config = load_model_config(config_file)
+    
+    if os.path.isfile(config_file): 
+        model.config = load_model_config(config_file)
+    else:
+        raise Exception("Configuration file '{}' not found!".format(config_file))
     
     return model 
 
@@ -338,7 +340,7 @@ def create_model_from_checkpoint(filename):
 # Predict the class (or classes) of an image
 def predict(image_path, model, topk=5):
     ''' Predict the class (or classes) of an image using a trained deep learning model.'''
-
+   
     #Load and pre-process image
     pf = get_preprocess_function(model.config['arch'])
     img = image.load_img(image_path, target_size=(224, 224))
