@@ -12,7 +12,7 @@ import uuid
 
 ### Configuration start here
 category_names = 'cat_to_name.json'
-checkpoint_file = 'checkpoints/cp_vgg16_e10_lr0.05.h5'
+checkpoint_file = 'checkpoints/cp_densenet201_e3_lr0.05.pth'
 upload_folder = '_tmp/'
 top_k = 5
 
