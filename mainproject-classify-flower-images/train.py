@@ -189,7 +189,7 @@ def get_input_args():
 
     # Check GPU
     if in_arg.backend == 'pytorch':
-        if in_arg.gpu and not mh.gpu_available():
+        if in_arg.gpu and not mhp.gpu_available():
             error_list.append("train.py: error: argument: --gpu: GPU not available")
                       
     # Check specific architectures foreach backend       
