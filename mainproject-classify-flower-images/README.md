@@ -18,7 +18,7 @@ http://flowers-env-pytorch.wffmpcmuy2.us-west-2.elasticbeanstalk.com/
 DockerHub:
 https://cloud.docker.com/u/vnardone/repository/docker/vnardone/flowers-app 
 
-# 01/2019 Update
+## 01/2019 Update
 
 Flutter client application (iOS / Android):
 https://github.com/vittorio-nardone/flowers_client_app 
