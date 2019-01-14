@@ -12,7 +12,7 @@ import uuid
 
 ### Configuration start here
 category_names = 'cat_to_name.json'
-checkpoint_file = 'checkpoints/checkpoints/resnet34_full_train.pth'
+checkpoint_file = 'checkpoints/resnet34_full_train.pth'
 upload_folder = '_tmp/'
 top_k = 5
 
