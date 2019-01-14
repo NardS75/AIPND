@@ -7,7 +7,7 @@ COPY model_helper_pytorch.py /app
 COPY websvc.py /app
 COPY requirements.txt /app
 COPY cat_to_name.json /app
-COPY checkpoints/cp_densenet201_e3_lr0.05.pth /app/checkpoints
+COPY checkpoints/resnet34_full_train.pth /app/checkpoints
 WORKDIR /app
 RUN pip install -r requirements.txt
 EXPOSE 5000
